@@ -1,0 +1,47 @@
+project:
+  name: "Heatmaps"
+  experiment_name: "WarpInjection-to-latent"
+  hf_checkpoint: "Archistrax/Qwen2_5_VL-FiLM-checkpoints"
+
+clearml:
+  project_name: ${project.name}
+  task_name: ${project.experiment_name}
+  output_uri: false
+  reuse_last_task_id: true
+
+dataset:
+  name: "set_eye_dataset_off"
+  # name: "dried_heatmaps"
+
+model:
+  name: "./Qwen2.5-VL-3B-Instruct"
+  kwargs:
+    torch_dtype: "bfloat16"
+    device_map: "cuda"
+    attn_implementation: "flash_attention_2"
+    trust_remote_code: true
+
+trainer:
+  output_dir: "./heat_qwen2.5-checkpoints"
+  num_train_epochs: 50
+  per_device_train_batch_size: 8
+  per_device_eval_batch_size: 12
+  gradient_accumulation_steps: 5
+  learning_rate: 1e-5
+  weight_decay: 0.01
+  lr_scheduler_type: "linear"
+  warmup_steps: 40
+  logging_steps: 2
+  save_steps: 200
+  save_strategy: "steps"
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  optim: "adamw_8bit"
+  push_to_hub: true
+  hub_model_id: ${project.hf_checkpoint}
+  eval_strategy: "steps"
+  eval_steps: 200
+  remove_unused_columns: false
+  dataloader_num_workers: 12
+  # max_grad_norm: 1.0
