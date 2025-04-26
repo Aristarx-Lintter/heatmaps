@@ -1,3 +1,4 @@
+import random
 from typing import List, Dict, Any
 
 import torch
@@ -53,18 +54,27 @@ def process_injection(image_grid_thw, features):
 
 
 class DataCollator:
-    def __init__(self, processor):
+    def __init__(
+            self, processor, 
+            transcribation_feature_name: str = "transcribation", 
+            calibration_feature_name: str = "model_description",
+            calib_prob: float = 0.0
+        ):
         self.processor = processor
+        self.transcribation_feature_name = transcribation_feature_name
+        self.calibration_feature_name = calibration_feature_name
+        self.calib_prob = calib_prob
 
-    def data_collator(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+        feature_name = self.calibration_feature_name if random.random() > self.calib_prob else self.transcribation_feature_name
         if not features:
             return {}
 
         messages = []
         answers = []
         for feature in features:
-            messages.append(messages_template(feature["image"], feature["transcribation"]))
-            answers.append(answer_template.format(ans_text=feature["transcribation"]))
+            messages.append(messages_template(feature["image"], feature[feature_name]))
+            answers.append(answer_template.format(ans_text=feature[feature_name]))
 
         texts = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
         image_inputs, _ = process_vision_info(messages)

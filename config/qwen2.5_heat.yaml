@@ -1,7 +1,7 @@
 project:
   name: "Heatmaps"
-  experiment_name: "WarpInjection-to-latent"
-  hf_checkpoint: "Archistrax/Qwen2_5_VL-FiLM-checkpoints"
+  experiment_name: "WarpInjection-to-latent-upd-transcribation"
+  hf_checkpoint: "Archistrax/Qwen2-5-VL-heat-checkpoints"
 
 clearml:
   project_name: ${project.name}
@@ -10,11 +10,13 @@ clearml:
   reuse_last_task_id: true
 
 dataset:
-  name: "set_eye_dataset_off"
+  name: "Archistrax/processed_transcribations"
+  transcribation_feature_name: "upd_transcribation"
+  # name: "set_eye_dataset_off"
   # name: "dried_heatmaps"
 
 model:
-  name: "./Qwen2.5-VL-3B-Instruct"
+  name: "Qwen/Qwen2.5-VL-3B-Instruct"
   kwargs:
     torch_dtype: "bfloat16"
     device_map: "cuda"
@@ -27,12 +29,12 @@ trainer:
   per_device_train_batch_size: 8
   per_device_eval_batch_size: 12
   gradient_accumulation_steps: 5
-  learning_rate: 1e-5
+  learning_rate: 2e-6
   weight_decay: 0.01
   lr_scheduler_type: "linear"
-  warmup_steps: 40
+  warmup_steps: 20
   logging_steps: 2
-  save_steps: 200
+  save_steps: 100
   save_strategy: "steps"
   bf16: true
   fp16: false

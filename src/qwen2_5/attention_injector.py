@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import flash_attn_varlen_func, apply_rotary_pos_emb_flashatt
-from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2RMSNorm, Qwen2_5_VLMLP
+from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2RMSNorm, Qwen2_5_VLMLP, Qwen2_5_VLVisionFlashAttention2
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VisionTransformerPretrainedModel
 
 
@@ -113,7 +113,11 @@ class Qwen2_5_VLVisionBlockHeat(nn.Module):
         self.norm0 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
         self.norm1 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
         self.norm2 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
-        self.attn = Qwen2_5_VLCrossAttentionFlashAttention2(
+        self.norm3 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
+        self.attn_self = Qwen2_5_VLVisionFlashAttention2(
+            config.hidden_size, num_heads=config.num_heads
+        )
+        self.attn_cross = Qwen2_5_VLCrossAttentionFlashAttention2(
             config.hidden_size, num_heads=config.num_heads
         )
         self.mlp = Qwen2_5_VLMLP(config, bias=True)
@@ -126,14 +130,22 @@ class Qwen2_5_VLVisionBlockHeat(nn.Module):
         rotary_pos_emb: Optional[torch.Tensor] = None,
         position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
     ) -> torch.Tensor:
-        hidden_states = hidden_states + self.attn(
-            self.norm1(hidden_states),
-            self.norm0(context_features),
+        hidden_states = hidden_states + self.attn_self(
+            self.norm0(hidden_states),
             cu_seqlens=cu_seqlens,
             rotary_pos_emb=rotary_pos_emb,
             position_embeddings=position_embeddings,
         )
-        hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
+        
+        hidden_states = hidden_states + self.attn_cross(
+            self.norm1(hidden_states),
+            self.norm2(context_features),
+            cu_seqlens=cu_seqlens,
+            rotary_pos_emb=rotary_pos_emb,
+            position_embeddings=position_embeddings,
+        )
+        
+        hidden_states = hidden_states + self.mlp(self.norm3(hidden_states))
         return hidden_states
 
 

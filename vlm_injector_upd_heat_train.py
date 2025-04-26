@@ -2,7 +2,7 @@ import fire
 
 import torch
 from transformers import AutoProcessor, AutoConfig, PreTrainedModel, ProcessorMixin, TrainingArguments, Trainer
-from datasets import Dataset
+from datasets import Dataset, load_dataset
 
 from src.common.dataset import DataCollator
 from src.experiment import Experiment
@@ -38,7 +38,7 @@ class HeatmapInjectionExperiment(Experiment):
             param.requires_grad = False
 
         init_transformer_block_weights(model.visual.blocks[-1])
-        init_transformer_block_weights(model.heat_embedding)
+        # init_transformer_block_weights(model.heat_embedding)
 
         for param in model.visual.blocks[-1].parameters():
             param.requires_grad = True
@@ -48,7 +48,7 @@ class HeatmapInjectionExperiment(Experiment):
         return model, processor
 
     def prepare_dataset(self):
-        dataset = Dataset.load_from_disk(self.cfg.dataset.name)
+        dataset = load_dataset(self.cfg.dataset.name)["train"]
         length = len(dataset)
         self.train_dataset = dataset.select(range(int(length * 0.95)))
         self.eval_dataset = dataset.select(range(int(length * 0.95), length))
@@ -57,7 +57,7 @@ class HeatmapInjectionExperiment(Experiment):
         self.model, self.processor = self.prepare_model()
         self.prepare_dataset()
         self.train_args = TrainingArguments(**self.cfg.trainer)
-        self.data_collator = DataCollator(self.processor)
+        self.data_collator = DataCollator(self.processor, self.cfg.dataset.transcribation_feature_name)
 
 
 def main(config):
