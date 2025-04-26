@@ -3,6 +3,7 @@ import fire
 import torch
 from transformers import AutoProcessor, AutoConfig, PreTrainedModel, ProcessorMixin, TrainingArguments, Trainer
 from datasets import Dataset, load_dataset
+from peft import LoraConfig, get_peft_model, TaskType
 
 from src.common.dataset import DataCollator
 from src.experiment import Experiment
@@ -13,6 +14,25 @@ from src.train_tools.initiator import init_transformer_block_weights
 # torch.autograd.set_detect_anomaly(True)
 
 
+def setup_lora(model: PreTrainedModel, lora_cfg: dict) -> PreTrainedModel:
+    lora_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM,
+        **lora_cfg 
+    )
+    model = get_peft_model(model, lora_config)
+    return model
+
+
+def set_trainable_parameters(model: PreTrainedModel) -> PreTrainedModel:
+    for param in model.base_model.model.heat_embedding.parameters():
+         param.requires_grad = True
+    for param in model.base_model.model.visual.blocks[-1].parameters():
+         param.requires_grad = True
+
+    model.print_trainable_parameters()
+    return model
+
+
 class HeatmapInjectionExperiment(Experiment):
     eval_dataset: Dataset = None
     model: PreTrainedModel = None
@@ -21,29 +41,18 @@ class HeatmapInjectionExperiment(Experiment):
     data_collator: callable = None
 
     def prepare_model(self) -> tuple[PreTrainedModel, ProcessorMixin]:
-
-        # hf_config = AutoConfig.from_pretrained(self.cfg.model.name, trust_remote_code=True)
-        # hf_config.vision_config.latent_dim = 512
-
         model = Qwen2_5_VLForConditionalGenerationWithHeatmap.from_pretrained(
             self.cfg.model.name,
-            # config=hf_config,
-            # ignore_mismatched_sizes=True,
             **self.cfg.model.kwargs
         )
         processor = AutoProcessor.from_pretrained(self.cfg.model.name)
         processor.tokenizer.padding_side = 'left'
 
-        for param in model.parameters():
-            param.requires_grad = False
-
         init_transformer_block_weights(model.visual.blocks[-1])
-        # init_transformer_block_weights(model.heat_embedding)
+        # init_transformer_block_weights(model.heat_embedding) # Uncomment if heat_embedding needs similar init
 
-        for param in model.visual.blocks[-1].parameters():
-            param.requires_grad = True
-        for param in model.heat_embedding.parameters():
-            param.requires_grad = True
+        model = setup_lora(model, self.cfg.lora)
+        model = set_trainable_parameters(model)
 
         return model, processor
 

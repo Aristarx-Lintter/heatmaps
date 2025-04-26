@@ -47,3 +47,19 @@ trainer:
   remove_unused_columns: false
   dataloader_num_workers: 12
   # max_grad_norm: 1.0
+
+lora:
+  r: 8
+  lora_alpha: 16
+  lora_dropout: 0.1
+  bias: "none"
+  target_modules:
+    - "visual.merger.mlp.0"
+    - "visual.merger.mlp.2"
+    - "model.q_proj"
+    - "model.k_proj"
+    - "model.v_proj"
+    - "model.o_proj"
+    - "model.gate_proj"
+    - "model.up_proj"
+    - "model.down_proj"

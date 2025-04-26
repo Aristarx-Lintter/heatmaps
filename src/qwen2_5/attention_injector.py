@@ -38,8 +38,8 @@ class Qwen2_5_VLCrossAttentionFlashAttention2(nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_state // num_heads
 
-        self.q_proj = nn.Linear(hidden_state, hidden_state, bias=bias)
-        self.kv_proj = nn.Linear(hidden_state, hidden_state * 2, bias=bias)
+        self.q = nn.Linear(hidden_state, hidden_state, bias=bias)
+        self.kv = nn.Linear(hidden_state, hidden_state * 2, bias=bias)
         self.proj = nn.Linear(hidden_state, hidden_state)
         
     def forward(
@@ -67,9 +67,9 @@ class Qwen2_5_VLCrossAttentionFlashAttention2(nn.Module):
         seq_length_kv = hidden_states.shape[0]  
         seq_length_q = context_features.shape[0]  
 
-        kv = self.kv_proj(hidden_states).reshape(seq_length_kv, 2, self.num_heads, self.head_dim)
+        kv = self.kv(hidden_states).reshape(seq_length_kv, 2, self.num_heads, self.head_dim)
         k, v = kv.unbind(1)
-        q = self.q_proj(context_features).reshape(seq_length_q, self.num_heads, self.head_dim)
+        q = self.q(context_features).reshape(seq_length_q, self.num_heads, self.head_dim)
 
         if position_embeddings is None:
             if rotary_pos_emb is None:
