@@ -49,9 +49,9 @@ class HeatmapInjectionExperiment(Experiment):
 
     def prepare_dataset(self):
         dataset = load_dataset(self.cfg.dataset.name)["train"]
-        length = len(dataset)
-        self.train_dataset = dataset.select(range(int(length * 0.95)))
-        self.eval_dataset = dataset.select(range(int(length * 0.95), length))
+        split_dataset = dataset.train_test_split(test_size=0.05)
+        self.train_dataset = split_dataset["train"]
+        self.eval_dataset = split_dataset["test"]
 
     def prepare_for_training(self):
         self.model, self.processor = self.prepare_model()
