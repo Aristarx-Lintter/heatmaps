@@ -91,8 +91,9 @@ class Qwen2_5_VLForConditionalGenerationWithHeatmap(Qwen2_5_VLForConditionalGene
             inputs_embeds = self.model.embed_tokens(input_ids)
             if pixel_values is not None:
                 pixel_values = pixel_values.type(self.visual.dtype)
-                heatmap_flat = heatmap_flat.reshape(-1, 1).type(self.visual.dtype)  # (b*h*w, 1) Apply flattening for native injection as human attention
-                heatmap_flat = self.heat_embedding(heatmap_flat)
+                if heatmap_flat is not None:
+                    heatmap_flat = heatmap_flat.reshape(-1, 1).type(self.visual.dtype)  # (b*h*w, 1) Apply flattening for native injection as human attention
+                    heatmap_flat = self.heat_embedding(heatmap_flat)
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw, heatmap_flat=heatmap_flat)
                 n_image_tokens = (input_ids == self.config.image_token_id).sum().item()
                 n_image_features = image_embeds.shape[0]

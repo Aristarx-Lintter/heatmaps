@@ -204,13 +204,16 @@ class Qwen2_5_VisionTransformerWithHeatmap(Qwen2_5_VisionTransformerPretrainedMo
             else:
                 cu_seqlens_now = cu_window_seqlens
             
+            if heatmap_flat is None and isinstance(blk, Qwen2_5_VLVisionBlockHeat):
+                continue            
+            
             if self.gradient_checkpointing and self.training:
                 args = [blk.__call__, hidden_states]
-                if heatmap_flat is not None and isinstance(blk, Qwen2_5_VLVisionBlockHeat):
-                    args.append(heatmap_flat)                
+                if isinstance(blk, Qwen2_5_VLVisionBlockHeat):
+                    args.append(heatmap_flat)
                 hidden_states = self._gradient_checkpointing_func(*args, cu_seqlens_now, None, position_embeddings)
             else:
-                injection = {"context_features": heatmap_flat} if heatmap_flat is not None and isinstance(blk, Qwen2_5_VLVisionBlockHeat) else {}
+                injection = {"context_features": heatmap_flat} if isinstance(blk, Qwen2_5_VLVisionBlockHeat) else {}
                 hidden_states = blk(hidden_states, cu_seqlens=cu_seqlens_now, position_embeddings=position_embeddings, **injection)
 
         hidden_states = self.merger(hidden_states)

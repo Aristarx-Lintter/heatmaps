@@ -66,7 +66,8 @@ class DataCollator:
         self.calib_prob = calib_prob
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
-        feature_name = self.calibration_feature_name if random.random() > self.calib_prob else self.transcribation_feature_name
+        is_calib_batch = random.random() < self.calib_prob
+        feature_name = self.calibration_feature_name if is_calib_batch else self.transcribation_feature_name
         if not features:
             return {}
 
@@ -83,6 +84,6 @@ class DataCollator:
         )  # ['input_ids', 'attention_mask', 'pixel_values', 'image_grid_thw']
 
         batch["labels"] = create_labels(batch["input_ids"], answers, self.processor.tokenizer)
-        batch["heatmap_flat"] = process_injection(batch["image_grid_thw"], features)
+        batch["heatmap_flat"] = process_injection(batch["image_grid_thw"], features) if not is_calib_batch else None
 
         return batch

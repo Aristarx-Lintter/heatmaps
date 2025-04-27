@@ -1,7 +1,7 @@
 project:
   name: "Heatmaps"
   experiment_name: "WarpInjection-to-latent-upd-transcribation"
-  hf_checkpoint: "Archistrax/Qwen2-5-VL-heat-checkpoints"
+  hf_checkpoint: "Archistrax/Qwen2-5-VL-full-heat-checkpoints"
 
 clearml:
   project_name: ${project.name}
@@ -11,7 +11,10 @@ clearml:
 
 dataset:
   name: "Archistrax/processed_transcribations"
-  transcribation_feature_name: "upd_transcribation"
+  kwargs:
+    transcribation_feature_name: "upd_transcribation"
+    calibration_feature_name: "model_description"
+    calib_prob: 0.3
   # name: "set_eye_dataset_off"
   # name: "dried_heatmaps"
 
@@ -24,17 +27,17 @@ model:
     trust_remote_code: true
 
 trainer:
-  output_dir: "./heat_qwen2.5-checkpoints"
+  output_dir: "./full_heat_qwen2.5-checkpoints"
   num_train_epochs: 50
   per_device_train_batch_size: 8
   per_device_eval_batch_size: 12
-  gradient_accumulation_steps: 5
-  learning_rate: 2e-6
+  gradient_accumulation_steps: 2
+  learning_rate: 2e-5
   weight_decay: 0.01
   lr_scheduler_type: "linear"
   warmup_steps: 20
   logging_steps: 2
-  save_steps: 100
+  save_steps: 50
   save_strategy: "steps"
   bf16: true
   fp16: false
@@ -43,7 +46,7 @@ trainer:
   push_to_hub: true
   hub_model_id: ${project.hf_checkpoint}
   eval_strategy: "steps"
-  eval_steps: 200
+  eval_steps: 50
   remove_unused_columns: false
   dataloader_num_workers: 12
   # max_grad_norm: 1.0

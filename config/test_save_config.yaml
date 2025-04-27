@@ -1,0 +1,66 @@
+project:
+  name: "Heatmaps_TestSave"
+  experiment_name: "TestSaveCallbackAndPush"
+  # Use the TEST repo ID confirmed by the user
+  hf_checkpoint: "Archistrax/Qwen2-5-VL-heat-checkpoints-TEST"
+
+clearml:
+  project_name: ${project.name}
+  task_name: ${project.experiment_name}
+  output_uri: false
+  reuse_last_task_id: false # Use a new task for testing
+
+dataset:
+  name: "Archistrax/processed_transcribations" # Keep the dataset, trainer will only use a few samples
+  transcribation_feature_name: "upd_transcribation"
+
+model:
+  name: "Qwen/Qwen2.5-VL-3B-Instruct" # Base model
+  kwargs:
+    torch_dtype: "bfloat16" # Keep dtype for consistency
+    device_map: "cuda"
+    attn_implementation: "flash_attention_2"
+    trust_remote_code: true
+
+lora: # Keep LoRA settings
+  r: 8
+  lora_alpha: 16
+  lora_dropout: 0.1
+  bias: "none"
+  target_modules:
+    - "visual.merger.mlp.0"
+    - "visual.merger.mlp.2"
+    - "model.q_proj"
+    - "model.k_proj"
+    - "model.v_proj"
+    - "model.o_proj"
+    - "model.gate_proj"
+    - "model.up_proj"
+    - "model.down_proj"
+
+trainer:
+  output_dir: "./test_save_checkpoints" # Use a separate output dir for testing
+  # --- Minimal Training Settings ---
+  max_steps: 1                   # Perform exactly one optimization step
+  per_device_train_batch_size: 1 # Use batch size 1
+  gradient_accumulation_steps: 2 # Accumulate gradients over 2 batches (total 1*2=2 samples processed)
+  # --- Saving Settings ---
+  save_strategy: "steps"
+  save_steps: 1                  # Save immediately after the first step
+  save_total_limit: 1            # Only keep the last checkpoint
+  # --- Hub Settings ---
+  push_to_hub: true
+  hub_model_id: ${project.hf_checkpoint} # Push to the test repo
+  hub_private_repo: true         # Recommend making test repos private
+  # --- Other Settings ---
+  learning_rate: 2e-6            # Needs a value, actual value doesn't matter much for 1 step
+  weight_decay: 0.01
+  lr_scheduler_type: "constant"  # Simple scheduler for 1 step
+  logging_steps: 1               # Log after the first step
+  eval_strategy: "no"            # No evaluation needed
+  bf16: true                     # Keep precision settings
+  fp16: false
+  gradient_checkpointing: true   # Keep if needed for memory
+  optim: "adamw_8bit"            # Keep optimizer
+  remove_unused_columns: false
+  dataloader_num_workers: 4      # Can reduce if needed 

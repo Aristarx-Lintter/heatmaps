@@ -1,5 +1,6 @@
 import fire
 
+from omegaconf import OmegaConf
 import torch
 from transformers import AutoProcessor, AutoConfig, PreTrainedModel, ProcessorMixin, TrainingArguments, Trainer
 from datasets import Dataset, load_dataset
@@ -8,7 +9,7 @@ from peft import LoraConfig, get_peft_model, TaskType
 from src.common.dataset import DataCollator
 from src.experiment import Experiment
 from src.qwen2_5.fa_model import Qwen2_5_VLForConditionalGenerationWithHeatmap
-from src.train_tools.callbacks import ClearMLCallback
+from src.train_tools.callbacks import ClearMLCallback, SaveCustomWeightsCallback
 from src.train_tools.initiator import init_transformer_block_weights
 
 # torch.autograd.set_detect_anomaly(True)
@@ -51,7 +52,7 @@ class HeatmapInjectionExperiment(Experiment):
         init_transformer_block_weights(model.visual.blocks[-1])
         # init_transformer_block_weights(model.heat_embedding) # Uncomment if heat_embedding needs similar init
 
-        model = setup_lora(model, self.cfg.lora)
+        model = setup_lora(model, OmegaConf.to_object(self.cfg.lora))
         model = set_trainable_parameters(model)
 
         return model, processor
@@ -66,7 +67,7 @@ class HeatmapInjectionExperiment(Experiment):
         self.model, self.processor = self.prepare_model()
         self.prepare_dataset()
         self.train_args = TrainingArguments(**self.cfg.trainer)
-        self.data_collator = DataCollator(self.processor, self.cfg.dataset.transcribation_feature_name)
+        self.data_collator = DataCollator(self.processor, **self.cfg.dataset.kwargs)
 
 
 def main(config):
@@ -82,7 +83,7 @@ def main(config):
         eval_dataset=experiment.eval_dataset,
         data_collator=experiment.data_collator,
         args=experiment.train_args,
-        callbacks=[ClearMLCallback(experiment.task)]
+        callbacks=[ClearMLCallback(experiment.task), SaveCustomWeightsCallback()]
     )
 
     trainer.train()
