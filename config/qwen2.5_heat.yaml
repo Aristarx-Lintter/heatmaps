@@ -32,7 +32,7 @@ trainer:
   per_device_train_batch_size: 8
   per_device_eval_batch_size: 12
   gradient_accumulation_steps: 2
-  learning_rate: 2e-5
+  learning_rate: 7e-6
   weight_decay: 0.01
   lr_scheduler_type: "linear"
   warmup_steps: 20
@@ -49,6 +49,7 @@ trainer:
   eval_steps: 50
   remove_unused_columns: false
   dataloader_num_workers: 12
+  resume_from_checkpoint: '${trainer.output_dir}/checkpoint-700'
   # max_grad_norm: 1.0
 
 lora:
@@ -59,10 +60,13 @@ lora:
   target_modules:
     - "visual.merger.mlp.0"
     - "visual.merger.mlp.2"
-    - "model.q_proj"
-    - "model.k_proj"
-    - "model.v_proj"
-    - "model.o_proj"
-    - "model.gate_proj"
-    - "model.up_proj"
-    - "model.down_proj"
+    - "visual.blocks.mlp.gate_proj"
+    - "visual.blocks.mlp.up_proj"
+    - "visual.blocks.mlp.down_proj"
+    # - "model.q_proj"
+    # - "model.k_proj"
+    # - "model.v_proj"
+    # - "model.o_proj"
+    # - "model.gate_proj"
+    # - "model.up_proj"
+    # - "model.down_proj"

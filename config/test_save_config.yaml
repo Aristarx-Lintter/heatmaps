@@ -12,7 +12,9 @@ clearml:
 
 dataset:
   name: "Archistrax/processed_transcribations" # Keep the dataset, trainer will only use a few samples
-  transcribation_feature_name: "upd_transcribation"
+  # Move dataset-specific args under kwargs to match DataCollator call
+  kwargs:
+    transcribation_feature_name: "upd_transcribation"
 
 model:
   name: "Qwen/Qwen2.5-VL-3B-Instruct" # Base model
@@ -30,13 +32,9 @@ lora: # Keep LoRA settings
   target_modules:
     - "visual.merger.mlp.0"
     - "visual.merger.mlp.2"
-    - "model.q_proj"
-    - "model.k_proj"
-    - "model.v_proj"
-    - "model.o_proj"
-    - "model.gate_proj"
-    - "model.up_proj"
-    - "model.down_proj"
+    - "visual.blocks.mlp.gate_proj"
+    - "visual.blocks.mlp.up_proj"
+    - "visual.blocks.mlp.down_proj"
 
 trainer:
   output_dir: "./test_save_checkpoints" # Use a separate output dir for testing
