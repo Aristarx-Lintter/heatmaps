@@ -49,8 +49,8 @@ class HeatmapInjectionExperiment(Experiment):
         processor = AutoProcessor.from_pretrained(self.cfg.model.name)
         processor.tokenizer.padding_side = 'left'
 
-        init_transformer_block_weights(model.visual.blocks[-1])
-        # init_transformer_block_weights(model.heat_embedding) # Uncomment if heat_embedding needs similar init
+        init_transformer_block_weights(model.visual.heat_blocks)
+        init_transformer_block_weights(model.heat_embedding) # Uncomment if heat_embedding needs similar init
 
         model = setup_lora(model, OmegaConf.to_object(self.cfg.lora))
         model = set_trainable_parameters(model)

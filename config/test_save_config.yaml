@@ -12,7 +12,8 @@ clearml:
 
 dataset:
   name: "Archistrax/processed_transcribations" # Keep the dataset, trainer will only use a few samples
-  transcribation_feature_name: "upd_transcribation"
+  kwargs:
+    transcribation_feature_name: "upd_transcribation"
 
 model:
   name: "Qwen/Qwen2.5-VL-3B-Instruct" # Base model

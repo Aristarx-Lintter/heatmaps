@@ -48,7 +48,7 @@ class SaveCustomWeightsCallback(TrainerCallback):
         custom_state_dict = {}
         layers_to_save = {
             "heat_embedding": model.base_model.model.heat_embedding,
-            "visual_last_block": model.base_model.model.visual.blocks[-1],
+            "visual_heat_blocks": model.base_model.model.visual.heat_blocks,
         }
 
         for name, layer in layers_to_save.items():

@@ -21,3 +21,6 @@ run_docker:
 	
 enter:
 	docker exec -it $(CONTAINER_NAME) bash
+
+train:
+	python vlm_injector_upd_heat_train.py --config config/qwen2.5_heat.yaml
