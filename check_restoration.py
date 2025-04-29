@@ -54,6 +54,23 @@ def check_model_restoration(
         else:
              logger.warning("No trainable weights found directly checkable within heat_embedding.")
 
+        # Check example parameters in attn_cross, norm3, norm4 (assuming block 0 exists)
+        block_0 = model.base_model.model.visual.blocks[0]
+        if hasattr(block_0, 'attn_cross') and hasattr(block_0.attn_cross, 'q') and block_0.attn_cross.q.weight.requires_grad:
+            logger.info("visual.blocks[0].attn_cross.q.weight appears to be trainable.")
+        else:
+            logger.warning("visual.blocks[0].attn_cross.q.weight does NOT appear trainable or attn_cross not found.")
+
+        if hasattr(block_0, 'norm3') and block_0.norm3.weight.requires_grad:
+            logger.info("visual.blocks[0].norm3.weight appears to be trainable.")
+        else:
+             logger.warning("visual.blocks[0].norm3.weight does NOT appear trainable or norm3 not found.")
+
+        if hasattr(block_0, 'norm4') and block_0.norm4.weight.requires_grad:
+            logger.info("visual.blocks[0].norm4.weight appears to be trainable.")
+        else:
+             logger.warning("visual.blocks[0].norm4.weight does NOT appear trainable or norm4 not found.")
+
         # This check should be correct as mlp.gate_proj.weight exists
         if model.base_model.model.visual.blocks[-1].mlp.gate_proj.weight.requires_grad:
              logger.info("visual.blocks[-1].mlp.gate_proj.weight appears to be trainable (as expected after loading).")
@@ -65,20 +82,20 @@ def check_model_restoration(
         logger.info("Processor loaded successfully.")
 
         # Optional: Perform a simple generation/inference check
-        logger.info("Performing a simple inference check...")
+        logger.warning("Performing a simple inference check...")
         try:
             # Construct a minimal input
             # This needs adjustment based on your processor and model requirements
             text = "hello"
             inputs = processor(text=text, return_tensors="pt").to(device_map)
             with torch.no_grad():
-                output = model.generate(**inputs, max_new_tokens=5)
-            logger.info(f"Inference output: {processor.decode(output[0], skip_special_tokens=True)}")
-            logger.info("Simple inference check successful.")
+                output = model.generate(**inputs, max_new_tokens=100)
+            logger.warning(f"Inference output: {processor.decode(output[0], skip_special_tokens=True)}")
+            logger.warning("Simple inference check successful.")
         except Exception as e:
             logger.error(f"Simple inference check failed: {e}")
 
-        logger.info("--- Restoration Check Complete --- ")
+        logger.warning("--- Restoration Check Complete --- ")
 
     except Exception as e:
         logger.error(f"Restoration check failed: {e}", exc_info=True)

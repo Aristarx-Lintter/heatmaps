@@ -110,11 +110,12 @@ class Qwen2_5_VLCrossAttentionFlashAttention2(nn.Module):
 class Qwen2_5_VLVisionBlockHeat(nn.Module):
     def __init__(self, config, attn_implementation: str = "sdpa") -> None:
         super().__init__()
-        self.norm0 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
         self.norm1 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
         self.norm2 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
         self.norm3 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
-        self.attn_self = Qwen2_5_VLVisionFlashAttention2(
+        self.norm4 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
+        
+        self.attn = Qwen2_5_VLVisionFlashAttention2(
             config.hidden_size, num_heads=config.num_heads
         )
         self.attn_cross = Qwen2_5_VLCrossAttentionFlashAttention2(
@@ -130,22 +131,24 @@ class Qwen2_5_VLVisionBlockHeat(nn.Module):
         rotary_pos_emb: Optional[torch.Tensor] = None,
         position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
     ) -> torch.Tensor:
-        hidden_states = hidden_states + self.attn_self(
-            self.norm0(hidden_states),
-            cu_seqlens=cu_seqlens,
-            rotary_pos_emb=rotary_pos_emb,
-            position_embeddings=position_embeddings,
-        )
-        
-        hidden_states = hidden_states + self.attn_cross(
+        hidden_states = hidden_states + self.attn(
             self.norm1(hidden_states),
-            self.norm2(context_features),
             cu_seqlens=cu_seqlens,
             rotary_pos_emb=rotary_pos_emb,
             position_embeddings=position_embeddings,
         )
         
-        hidden_states = hidden_states + self.mlp(self.norm3(hidden_states))
+        if context_features is not None:  # Injection here
+        
+            hidden_states = hidden_states + self.attn_cross(
+                self.norm3(hidden_states),
+                self.norm4(context_features),
+                cu_seqlens=cu_seqlens,
+                rotary_pos_emb=rotary_pos_emb,
+                position_embeddings=position_embeddings,
+            )
+        
+        hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
         return hidden_states
 
 
@@ -154,7 +157,9 @@ class Qwen2_5_VisionTransformerWithHeatmap(Qwen2_5_VisionTransformerPretrainedMo
         super().__init__(config)
         # self.post_merger_injector = PostMergerHeatmapInjector(config.out_hidden_size, config.latent_dim)
         # self.post_merger_injector = PostMergerFiLMInjector(config.out_hidden_size, config.latent_dim)
-        self.blocks.append(Qwen2_5_VLVisionBlockHeat(config))   
+        self.blocks = nn.ModuleList(
+            [Qwen2_5_VLVisionBlockHeat(config, config._attn_implementation) for _ in range(config.depth)]
+        )
 
     def forward(self, hidden_states: torch.Tensor, grid_thw: torch.Tensor, heatmap_flat: torch.Tensor = None) -> torch.Tensor:
         """
@@ -202,18 +207,13 @@ class Qwen2_5_VisionTransformerWithHeatmap(Qwen2_5_VisionTransformerPretrainedMo
             if layer_num in self.fullatt_block_indexes:
                 cu_seqlens_now = cu_seqlens
             else:
-                cu_seqlens_now = cu_window_seqlens
-            
-            if heatmap_flat is None and isinstance(blk, Qwen2_5_VLVisionBlockHeat):
-                continue            
+                cu_seqlens_now = cu_window_seqlens          
             
             if self.gradient_checkpointing and self.training:
-                args = [blk.__call__, hidden_states]
-                if isinstance(blk, Qwen2_5_VLVisionBlockHeat):
-                    args.append(heatmap_flat)
+                args = [blk.__call__, hidden_states, heatmap_flat]  # injected heatmap
                 hidden_states = self._gradient_checkpointing_func(*args, cu_seqlens_now, None, position_embeddings)
             else:
-                injection = {"context_features": heatmap_flat} if isinstance(blk, Qwen2_5_VLVisionBlockHeat) else {}
+                injection = {"context_features": heatmap_flat}  # injected heatmap
                 hidden_states = blk(hidden_states, cu_seqlens=cu_seqlens_now, position_embeddings=position_embeddings, **injection)
 
         hidden_states = self.merger(hidden_states)

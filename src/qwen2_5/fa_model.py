@@ -191,23 +191,6 @@ class Qwen2_5_VLForConditionalGenerationWithHeatmap(Qwen2_5_VLForConditionalGene
             # Enable model parallelism
             shift_labels = shift_labels.to(shift_logits.device)
 
-            # logits_to_check = shift_logits  # Тензор перед подачей в лосс
-            #
-            # if torch.isnan(logits_to_check).any():
-            #     print("!!! ОБНАРУЖЕНЫ NaN В shift_logits ПЕРЕД ФУНКЦИЕЙ ПОТЕРЬ !!!")
-            # elif torch.isinf(logits_to_check).any():
-            #     print("!!! ОБНАРУЖЕНЫ Inf В shift_logits ПЕРЕД ФУНКЦИЕЙ ПОТЕРЬ !!!")
-            # else:
-            #     # Если нет NaN/Inf, проверим масштаб
-            #     print(f"Статистика shift_logits перед лоссом: "
-            #           f"min={logits_to_check.min().item():.4f}, "
-            #           f"max={logits_to_check.max().item():.4f}, "
-            #           f"mean={logits_to_check.mean().item():.4f}")
-            #
-            # # Также проверьте метки на всякий случай
-            # if torch.any((shift_labels != -100) & ((shift_labels < 0) | (shift_labels >= self.config.vocab_size))):
-            #     print("!!! ОБНАРУЖЕНЫ НЕКОРРЕКТНЫЕ ID В shift_labels (кроме -100) !!!")
-
             loss = loss_fct(shift_logits, shift_labels)
 
         if not return_dict:

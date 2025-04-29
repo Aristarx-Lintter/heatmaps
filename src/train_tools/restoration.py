@@ -3,15 +3,13 @@ import os
 from transformers import AutoProcessor, AutoConfig, PreTrainedModel
 from peft import PeftModel
 from transformers.utils import logging
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, snapshot_download
 from huggingface_hub.utils import EntryNotFoundError
 from omegaconf import OmegaConf
+import re
 
 from src.qwen2_5.fa_model import Qwen2_5_VLForConditionalGenerationWithHeatmap
-# from src.experiment import Experiment # Uncomment if you load config structure from Experiment
 
-logger = logging.get_logger(__name__)
-logging.set_verbosity_info()
 
 def _get_base_model_kwargs(
     config_path: str | None,
@@ -20,35 +18,20 @@ def _get_base_model_kwargs(
     kwargs = default_kwargs.copy()
     if not config_path or not os.path.exists(config_path):
         return kwargs
-    try:
-        cfg = OmegaConf.load(config_path)
-        OmegaConf.resolve(cfg)
-        if hasattr(cfg, 'model.kwargs'):
-            loaded_kwargs = OmegaConf.to_container(cfg.model.kwargs, resolve=True)
-            kwargs.update(loaded_kwargs)
-            # Ensure explicitly passed args override config
-            kwargs.update(default_kwargs)
-            logger.info(f"Loaded and updated base model kwargs from {config_path}")
-    except Exception as e:
-        logger.warning(f"Could not load base model kwargs from {config_path}: {e}. Using defaults.")
+    cfg = OmegaConf.load(config_path)
+    OmegaConf.resolve(cfg)
+    if hasattr(cfg, 'model.kwargs'):
+        loaded_kwargs = OmegaConf.to_container(cfg.model.kwargs, resolve=True)
+        kwargs.update(loaded_kwargs)
+        kwargs.update(default_kwargs)
     return kwargs
 
-def _load_base_model(
-    base_model_path: str,
-    config_path: str | None,
-    **kwargs
-) -> PreTrainedModel:
+def _load_base_model(base_model_path: str, config_path: str | None, **kwargs) -> PreTrainedModel:
     effective_kwargs = _get_base_model_kwargs(config_path, kwargs)
-    logger.info(f"Loading base model: {base_model_path} with kwargs: {effective_kwargs}")
-    try:
-        model = Qwen2_5_VLForConditionalGenerationWithHeatmap.from_pretrained(
-            base_model_path, **effective_kwargs
-        )
-        logger.info("Base model loaded.")
-        return model
-    except Exception as e:
-        logger.error(f"Failed to load base model: {e}")
-        raise
+    model = Qwen2_5_VLForConditionalGenerationWithHeatmap.from_pretrained(
+        base_model_path, **effective_kwargs
+    )
+    return model
 
 def _load_peft_adapters(
     base_model: PreTrainedModel,
@@ -57,74 +40,83 @@ def _load_peft_adapters(
     revision: str | None,
     **kwargs
 ) -> PeftModel:
-    logger.info(f"Loading PEFT adapters from: {checkpoint_identifier}" + (f"/{subfolder}" if subfolder else ""))
-    try:
-        model = PeftModel.from_pretrained(
-            base_model, checkpoint_identifier, subfolder=subfolder, revision=revision, **kwargs
-        )
-        logger.info("PEFT adapters loaded.")
-        return model
-    except Exception as e:
-        logger.error(f"Failed to load PEFT adapters: {e}")
-        raise
+    model = PeftModel.from_pretrained(
+        base_model, checkpoint_identifier, subfolder=subfolder, revision=revision, **kwargs
+    )
+    return model
+
 
 def _find_custom_weights_path(
     checkpoint_identifier: str,
-    subfolder: str | None,
-    revision: str | None,
+    revision: str | None = None,
     filename: str = "custom_trained_weights.pt"
 ) -> str | None:
-    # Try local path first
+    # Case 1: checkpoint_identifier is a local directory
     if os.path.isdir(checkpoint_identifier):
-        local_dir = os.path.join(checkpoint_identifier, subfolder) if subfolder else checkpoint_identifier
-        local_path = os.path.join(local_dir, filename)
+        local_path = os.path.join(checkpoint_identifier, filename)
         if os.path.exists(local_path):
-            logger.info(f"Found local custom weights: {local_path}")
             return local_path
         else:
-             # If local dir exists but file doesn't, don't try Hub
-             logger.warning(f"Custom weights not found locally at {local_path}")
-             return None
+            # Don't attempt Hub download if it was explicitly a local path that failed
+            return None
 
-    # Try Hub download if not found locally or if identifier wasn't a local dir
+    # Case 2: checkpoint_identifier is a Hub repo ID
     try:
         downloaded_path = hf_hub_download(
             repo_id=checkpoint_identifier,
-            filename=filename, # Search at the root
+            filename=filename,
             revision=revision,
             cache_dir=None,
         )
-        logger.info(f"Downloaded custom weights from Hub: {filename} (repo: {checkpoint_identifier}, revision: {revision})")
         return downloaded_path
     except EntryNotFoundError:
-         logger.warning(f"Custom weights '{filename}' not found on Hub repo '{checkpoint_identifier}' (revision: {revision}).")
-         return None
-    except Exception as e:
-        logger.error(f"Error downloading custom weights '{filename}' from Hub repo '{checkpoint_identifier}': {e}")
-        return None
+        return None # File not found on Hub
+    except Exception:
+        return None # Other Hub download errors
 
 def _apply_custom_weights(
     model: PeftModel,
     weights_path: str
 ):
-    try:
-        logger.info(f"Loading custom weights state_dict from: {weights_path}")
-        custom_state_dict = torch.load(weights_path, map_location='cpu')
-        keys_heat = {k.split('.', 1)[1]: v for k, v in custom_state_dict.items() if k.startswith("heat_embedding.")}
-        keys_visual = {k.split('.', 1)[1]: v for k, v in custom_state_dict.items() if k.startswith("visual_last_block.")}
+    custom_state_dict = torch.load(weights_path, map_location='cpu')
+    base_model = model.base_model.model
 
-        if keys_heat:
-            missing, unexpected = model.base_model.model.heat_embedding.load_state_dict(keys_heat, strict=False)
-            if missing or unexpected: logger.warning(f"Apply Heat Embedding - Missing: {missing}, Unexpected: {unexpected}")
-            logger.info("Applied custom weights to heat_embedding.")
+    # Group weights by target module
+    weights_by_module = {}
+    visual_block_pattern = re.compile(r"visual\.blocks\.(\d+)\.(attn_cross|norm3|norm4)\.(.*)")
 
-        if keys_visual:
-            missing, unexpected = model.base_model.model.visual.blocks[-1].load_state_dict(keys_visual, strict=False)
-            if missing or unexpected: logger.warning(f"Apply Visual Last Block - Missing: {missing}, Unexpected: {unexpected}")
-            logger.info("Applied custom weights to visual.blocks[-1].")
+    for key, value in custom_state_dict.items():
+        if key.startswith("heat_embedding."):
+            original_key = key[len("heat_embedding."):]
+            weights_by_module.setdefault("heat_embedding", {})[original_key] = value
+        else:
+            match = visual_block_pattern.match(key)
+            if match:
+                block_idx, module_name, param_name = match.groups()
+                block_idx = int(block_idx)
+                module_key = f"visual.blocks.{block_idx}.{module_name}"
+                weights_by_module.setdefault(module_key, {})[param_name] = value
+    # Load weights into corresponding modules
+    loaded_modules = []
+    for module_key, state_dict_to_load in weights_by_module.items():
+        target_module = None
+        if module_key == "heat_embedding":
+            if hasattr(base_model, "heat_embedding"):
+                target_module = base_model.heat_embedding
+                print(f"Loaded heat_embedding weights to model: {module_key}")
+        elif module_key.startswith("visual.blocks."):
+            parts = module_key.split('.') # visual.blocks.{idx}.{name}
+            if len(parts) == 4:
+                block_idx = int(parts[2])
+                module_name = parts[3]
+                if hasattr(base_model, "visual") and hasattr(base_model.visual, "blocks") and block_idx < len(base_model.visual.blocks):
+                    block = base_model.visual.blocks[block_idx]
+                    target_module = getattr(block, module_name, None)
+                    print(f"Loaded visual block weights to model: {module_key}")
+        if target_module is not None:
+            target_module.load_state_dict(state_dict_to_load, strict=False)
+            loaded_modules.append(module_key)
 
-    except Exception as e:
-        logger.error(f"Failed to load or apply custom weights from {weights_path}: {e}")
 
 def load_model_with_adapters(
     base_model_path: str,
@@ -148,36 +140,37 @@ def load_model_with_adapters(
 
     adapter_load_kwargs = {"device_map": device_map, **peft_kwargs}
     model = _load_peft_adapters(base_model, checkpoint_identifier, subfolder, revision, **adapter_load_kwargs)
+    base_model_unwrapped = model.base_model.model
 
-    # --- Explicitly set custom layers to trainable AFTER loading PEFT adapters --- #
-    # This is necessary because PeftModel.from_pretrained freezes the base model.
-    logger.info("Setting requires_grad=True for custom trained layers (heat_embedding, visual.blocks[-1])...")
-    for param in model.base_model.model.heat_embedding.parameters():
-         param.requires_grad = True
-    for param in model.base_model.model.visual.blocks[-1].parameters():
-         param.requires_grad = True
-    logger.info("Custom layers set to trainable.")
-    # ----------------------------------------------------------------------------- #
+    # Set requires_grad for heat_embedding
+    if hasattr(base_model_unwrapped, "heat_embedding"):
+        for param in base_model_unwrapped.heat_embedding.parameters():
+            param.requires_grad = True
+
+    # Set requires_grad for attn_cross, norm3, norm4 in visual blocks
+    if hasattr(base_model_unwrapped, "visual") and hasattr(base_model_unwrapped.visual, "blocks"):
+        for i, block in enumerate(base_model_unwrapped.visual.blocks):
+            updated_in_block = False
+            for module_name in ["attn_cross", "norm3", "norm4"]:
+                module_obj = getattr(block, module_name, None)
+                if module_obj:
+                    for param in module_obj.parameters():
+                        param.requires_grad = True
+                    updated_in_block = True
+
 
     if load_custom_weights:
-        custom_weights_path = _find_custom_weights_path(checkpoint_identifier, subfolder, revision)
+        custom_weights_path = _find_custom_weights_path(checkpoint_identifier, revision)
         if custom_weights_path:
             _apply_custom_weights(model, custom_weights_path)
-        else:
-             logger.info("Proceeding without custom weights as they were not found.")
 
-    logger.info("Model loading complete.")
     return model
 
 # --- Processor Loading Function --- #
 def load_processor(model_path_or_id: str, **kwargs) -> AutoProcessor:
-    try:
-        processor = AutoProcessor.from_pretrained(model_path_or_id, **kwargs)
-        logger.info(f"Processor loaded from {model_path_or_id}")
-        return processor
-    except Exception as e:
-        logger.error(f"Failed to load processor from {model_path_or_id}: {e}")
-        raise
+    processor = AutoProcessor.from_pretrained(model_path_or_id, **kwargs)
+    return processor
+
 
 # Example usage (can be called from another script or notebook):
 # if __name__ == '__main__':
