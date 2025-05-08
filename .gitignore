@@ -8,8 +8,8 @@ __pycache__/
 
 /**/.ipynb_checkpoints/
 checkpoints/
-*-checkpoints/
-*_checkpoints/
+*-checkpoints*/
+*_checkpoints*/
 qwen2.5-*/
 raw_vit/
 *dataset*/
