@@ -21,3 +21,6 @@ run_docker:
 	
 enter:
 	docker exec -it $(CONTAINER_NAME) bash
+
+tuning:
+	python vlm_injector_heat_tune.py --config config/qwen2.5_heat_tune.yaml

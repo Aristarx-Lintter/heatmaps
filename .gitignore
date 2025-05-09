@@ -116,3 +116,16 @@ venv/
 .venv/
 env/
 .env/
+baked_heat_qwen/added_tokens.json
+baked_heat_qwen/chat_template.json
+baked_heat_qwen/config.json
+baked_heat_qwen/generation_config.json
+baked_heat_qwen/merges.txt
+baked_heat_qwen/model-00001-of-00002.safetensors
+baked_heat_qwen/model-00002-of-00002.safetensors
+baked_heat_qwen/model.safetensors.index.json
+baked_heat_qwen/preprocessor_config.json
+baked_heat_qwen/special_tokens_map.json
+baked_heat_qwen/tokenizer_config.json
+baked_heat_qwen/tokenizer.json
+baked_heat_qwen/vocab.json

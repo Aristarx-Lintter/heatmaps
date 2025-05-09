@@ -9,7 +9,7 @@ from peft import LoraConfig, get_peft_model, TaskType
 from src.common.dataset import DataCollator
 from src.experiment import Experiment
 from src.qwen2_5.fa_model import Qwen2_5_VLForConditionalGenerationWithHeatmap
-from src.train_tools.callbacks import ClearMLCallback, SaveCustomWeightsCallback
+from src.train_tools.callbacks import ClearMLCallback
 from src.train_tools.initiator import init_transformer_block_weights
 
 # torch.autograd.set_detect_anomaly(True)
@@ -83,7 +83,7 @@ def main(config):
         eval_dataset=experiment.eval_dataset,
         data_collator=experiment.data_collator,
         args=experiment.train_args,
-        callbacks=[ClearMLCallback(experiment.task), SaveCustomWeightsCallback()]
+        callbacks=[ClearMLCallback(experiment.task)]
     )
 
     trainer.train()
