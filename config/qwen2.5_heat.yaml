@@ -1,7 +1,7 @@
 project:
   name: "Heatmaps"
-  experiment_name: "WarpInjection-to-latent-upd-transcribation"
-  hf_checkpoint: "Archistrax/Qwen2-5-VL-full-heat-checkpoints"
+  experiment_name: "MiddleInjection-upd-transcribation-visual-merger"
+  hf_checkpoint: "Archistrax/Qwen2-5-VL-middle-injection-checkpoints"
 
 clearml:
   project_name: ${project.name}
@@ -14,7 +14,7 @@ dataset:
   kwargs:
     transcribation_feature_name: "upd_transcribation"
     calibration_feature_name: "model_description"
-    calib_prob: 0.3
+    calib_prob: 0.2
   # name: "set_eye_dataset_off"
   # name: "dried_heatmaps"
 
@@ -27,17 +27,17 @@ model:
     trust_remote_code: true
 
 trainer:
-  output_dir: "./full_heat_qwen2.5-checkpoints"
+  output_dir: "./middle_injection_visual_merger_qwen2.5-checkpoints"
   num_train_epochs: 50
-  per_device_train_batch_size: 8
+  per_device_train_batch_size: 18
   per_device_eval_batch_size: 12
   gradient_accumulation_steps: 2
-  learning_rate: 2e-5
+  learning_rate: 8e-6
   weight_decay: 0.01
   lr_scheduler_type: "linear"
   warmup_steps: 20
   logging_steps: 2
-  save_steps: 50
+  save_steps: 
   save_strategy: "steps"
   bf16: true
   fp16: false
@@ -46,23 +46,21 @@ trainer:
   push_to_hub: true
   hub_model_id: ${project.hf_checkpoint}
   eval_strategy: "steps"
-  eval_steps: 50
+  eval_steps: 100
   remove_unused_columns: false
   dataloader_num_workers: 12
   # max_grad_norm: 1.0
 
 lora:
-  r: 8
-  lora_alpha: 16
+  r: 64
+  lora_alpha: 128
   lora_dropout: 0.1
   bias: "none"
-  target_modules:
-    - "visual.merger.mlp.0"
-    - "visual.merger.mlp.2"
-    - "model.q_proj"
-    - "model.k_proj"
-    - "model.v_proj"
-    - "model.o_proj"
-    - "model.gate_proj"
-    - "model.up_proj"
-    - "model.down_proj"
+  target_modules_patterns:
+    # - "heat_embedding\\.linear[12]"       # heat_embedding.linear1 и heat_embedding.linear2
+    - "visual\\.merger\\.mlp\\.[02]"         # visual.merger.mlp.0 и visual.merger.mlp.2
+    # - "visual\\.heat_block\\.(attn_self\\.(qkv|proj)|attn_cross\\.(q|kv)|mlp\\.(gate_proj|up_proj|down_proj))"
+    - "visual\\.blocks\\.2[3-9]\\.(attn\\.(qkv|proj)|mlp\\.(gate_proj|up_proj|down_proj))" 
+    - "visual\\.blocks\\.3[01]\\.(attn\\.(qkv|proj)|mlp\\.(gate_proj|up_proj|down_proj))" 
+    # - "model\\.layers\\.\\d+\\.self_attn\\.(q_proj|k_proj|v_proj|o_proj)" # Все self_attn проекции в языковой модели
+    # - "model\\.layers\\.\\d+\\.mlp\\.(gate_proj|up_proj|down_proj)"       # Все mlp проекции в языковой модели

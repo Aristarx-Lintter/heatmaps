@@ -24,3 +24,9 @@ enter:
 
 tuning:
 	python vlm_injector_heat_tune.py --config config/qwen2.5_heat_tune.yaml
+
+train:
+	python vlm_injector_upd_heat_train.py --config config/qwen2.5_heat.yaml
+
+test_training_pipeline:
+	python vlm_injector_upd_heat_train.py --config config/test_save_config.yaml

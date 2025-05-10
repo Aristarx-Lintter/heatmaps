@@ -10,6 +10,7 @@ __pycache__/
 checkpoints/
 *-checkpoints*/
 *_checkpoints*/
+baked*/
 qwen2.5-*/
 raw_vit/
 *dataset*/

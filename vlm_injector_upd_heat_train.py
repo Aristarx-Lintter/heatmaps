@@ -1,4 +1,5 @@
 import fire
+import re
 
 from omegaconf import OmegaConf
 import torch
@@ -9,25 +10,70 @@ from peft import LoraConfig, get_peft_model, TaskType
 from src.common.dataset import DataCollator
 from src.experiment import Experiment
 from src.qwen2_5.fa_model import Qwen2_5_VLForConditionalGenerationWithHeatmap
-from src.train_tools.callbacks import ClearMLCallback
+from src.train_tools.callbacks import ClearMLCallback, SaveCustomWeightsCallback
 from src.train_tools.initiator import init_transformer_block_weights
 
 # torch.autograd.set_detect_anomaly(True)
 
 
-def setup_lora(model: PreTrainedModel, lora_cfg: dict) -> PreTrainedModel:
-    lora_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM,
-        **lora_cfg 
-    )
-    model = get_peft_model(model, lora_config)
-    return model
+# def setup_lora(model: PreTrainedModel, lora_cfg: dict) -> PreTrainedModel:
+#     lora_config = LoraConfig(
+#         task_type=TaskType.CAUSAL_LM,
+#         **lora_cfg 
+#     )
+#     model = get_peft_model(model, lora_config)
+#     return model
 
+
+def setup_lora(model: PreTrainedModel, lora_cfg: dict) -> PreTrainedModel:
+    target_modules_patterns = lora_cfg.pop('target_modules_patterns', [])
+
+    all_module_names = [name for name, _ in model.named_modules()]
+    final_target_modules = set()
+
+    if target_modules_patterns:
+        for pattern_str in target_modules_patterns:
+            try:
+                pattern = re.compile(pattern_str)
+            except re.error as e:
+                print(f"Warning: Invalid regex pattern '{pattern_str}': {e}. Skipping this pattern.")
+                continue
+            
+            found_for_pattern = False
+            for module_name in all_module_names:
+                if pattern.fullmatch(module_name):
+                    final_target_modules.add(module_name)
+                    if not found_for_pattern:
+                        print(f"  Pattern '{pattern_str}' matched:")
+                        found_for_pattern = True
+                    print(f"    - {module_name}")
+            if not found_for_pattern:
+                print(f"  Pattern '{pattern_str}' did not match any module names.")
+        print("==================================================")
+    else:
+        print("Warning: No target_modules_patterns specified in LoRA config.")
+
+    if not final_target_modules:
+        print("Warning: No modules were matched by the provided patterns for LoRA. LoRA will not be applied to any specific layers directly via target_modules. Check your patterns.")
+
+    lora_config_params = {
+        **lora_cfg,
+        'task_type': TaskType.CAUSAL_LM,
+        'target_modules': list(final_target_modules) if final_target_modules else None,
+    }
+
+    lora_config = LoraConfig(**lora_config_params)
+    
+    model = get_peft_model(model, lora_config)
+    print("\n=== LoRA Model Trainable Parameters (after get_peft_model) ===")
+    model.print_trainable_parameters()
+    print("===========================================================")
+    return model
 
 def set_trainable_parameters(model: PreTrainedModel) -> PreTrainedModel:
     for param in model.base_model.model.heat_embedding.parameters():
          param.requires_grad = True
-    for param in model.base_model.model.visual.blocks[-1].parameters():
+    for param in model.base_model.model.visual.heat_block.parameters():
          param.requires_grad = True
 
     model.print_trainable_parameters()
@@ -49,8 +95,8 @@ class HeatmapInjectionExperiment(Experiment):
         processor = AutoProcessor.from_pretrained(self.cfg.model.name)
         processor.tokenizer.padding_side = 'left'
 
-        init_transformer_block_weights(model.visual.blocks[-1])
-        # init_transformer_block_weights(model.heat_embedding) # Uncomment if heat_embedding needs similar init
+        init_transformer_block_weights(model.visual.heat_block)
+        init_transformer_block_weights(model.heat_embedding) # Uncomment if heat_embedding needs similar init
 
         model = setup_lora(model, OmegaConf.to_object(self.cfg.lora))
         model = set_trainable_parameters(model)
@@ -83,7 +129,7 @@ def main(config):
         eval_dataset=experiment.eval_dataset,
         data_collator=experiment.data_collator,
         args=experiment.train_args,
-        callbacks=[ClearMLCallback(experiment.task)]
+        callbacks=[ClearMLCallback(experiment.task), SaveCustomWeightsCallback()]
     )
 
     trainer.train()

@@ -73,12 +73,12 @@ def check_model_restoration(
             inputs = processor(text=text, return_tensors="pt").to(device_map)
             with torch.no_grad():
                 output = model.generate(**inputs, max_new_tokens=5)
-            logger.info(f"Inference output: {processor.decode(output[0], skip_special_tokens=True)}")
-            logger.info("Simple inference check successful.")
+            logger.warning(f"Inference output: {processor.decode(output[0], skip_special_tokens=True)}")
+            logger.warning("Simple inference check successful.")
         except Exception as e:
             logger.error(f"Simple inference check failed: {e}")
 
-        logger.info("--- Restoration Check Complete --- ")
+        logger.warning("--- Restoration Check Complete --- ")
 
     except Exception as e:
         logger.error(f"Restoration check failed: {e}", exc_info=True)

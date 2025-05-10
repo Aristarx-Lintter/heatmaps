@@ -48,14 +48,14 @@ class SaveCustomWeightsCallback(TrainerCallback):
         custom_state_dict = {}
         layers_to_save = {
             "heat_embedding": model.base_model.model.heat_embedding,
-            "visual_last_block": model.base_model.model.visual.blocks[-1],
+            "heat_block": model.base_model.model.visual.heat_block,
         }
 
         for name, layer in layers_to_save.items():
             for param_name, param in layer.named_parameters():
-                if param.requires_grad:
-                    full_param_name = f"{name}.{param_name}"
-                    custom_state_dict[full_param_name] = param.cpu().clone()
+                full_param_name = f"{name}.{param_name}"
+                custom_state_dict[full_param_name] = param.cpu().clone()
+                print(f"Saving {full_param_name}")
 
         if not custom_state_dict:
             logger.info("No custom trainable weights found to save.")

@@ -12,7 +12,10 @@ clearml:
 
 dataset:
   name: "Archistrax/processed_transcribations" # Keep the dataset, trainer will only use a few samples
-  transcribation_feature_name: "upd_transcribation"
+  kwargs:
+    transcribation_feature_name: "transcribation"
+    calibration_feature_name: "model_description"
+    calib_prob: 0.3
 
 model:
   name: "Qwen/Qwen2.5-VL-3B-Instruct" # Base model
@@ -28,15 +31,54 @@ lora: # Keep LoRA settings
   lora_dropout: 0.1
   bias: "none"
   target_modules:
-    - "visual.merger.mlp.0"
-    - "visual.merger.mlp.2"
-    - "model.q_proj"
-    - "model.k_proj"
-    - "model.v_proj"
-    - "model.o_proj"
-    - "model.gate_proj"
-    - "model.up_proj"
-    - "model.down_proj"
+    - 'visual.merger.mlp.0'
+    - 'visual.merger.mlp.2'
+    - 'visual.blocks.25.qkv'
+    - 'visual.blocks.25.proj'
+    - 'visual.blocks.25.gate_proj'
+    - 'visual.blocks.25.up_proj'
+    - 'visual.blocks.25.down_proj'
+    - 'visual.blocks.26.qkv'
+    - 'visual.blocks.26.proj'
+    - 'visual.blocks.26.gate_proj'
+    - 'visual.blocks.26.up_proj'
+    - 'visual.blocks.26.down_proj'
+    - 'visual.blocks.27.qkv'
+    - 'visual.blocks.27.proj'
+    - 'visual.blocks.27.gate_proj'
+    - 'visual.blocks.27.up_proj'
+    - 'visual.blocks.27.down_proj'
+    - 'visual.blocks.28.qkv'
+    - 'visual.blocks.28.proj'
+    - 'visual.blocks.28.gate_proj'
+    - 'visual.blocks.28.up_proj'
+    - 'visual.blocks.28.down_proj'
+    - 'visual.blocks.29.qkv'
+    - 'visual.blocks.29.proj'
+    - 'visual.blocks.29.gate_proj'
+    - 'visual.blocks.29.up_proj'
+    - 'visual.blocks.29.down_proj'
+    - 'visual.blocks.30.qkv'
+    - 'visual.blocks.30.proj'
+    - 'visual.blocks.30.gate_proj'
+    - 'visual.blocks.30.up_proj'
+    - 'visual.blocks.30.down_proj'
+    - 'visual.blocks.31.qkv'
+    - 'visual.blocks.31.proj'
+    - 'visual.blocks.31.gate_proj'
+    - 'visual.blocks.31.up_proj'
+    - 'visual.blocks.31.down_proj'
+
+  # target_modules:
+  #   - "visual.merger.mlp.0"
+  #   - "visual.merger.mlp.2"
+  #   - "model.q_proj"
+  #   - "model.k_proj"
+  #   - "model.v_proj"
+  #   - "model.o_proj"
+  #   - "model.gate_proj"
+  #   - "model.up_proj"
+  #   - "model.down_proj"
 
 trainer:
   output_dir: "./test_save_checkpoints" # Use a separate output dir for testing

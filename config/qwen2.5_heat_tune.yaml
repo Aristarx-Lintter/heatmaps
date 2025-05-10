@@ -1,7 +1,7 @@
 project:
   name: "Heatmaps"
-  experiment_name: "WarpInjection-to-latent-upd-transcribation"
-  hf_checkpoint: "Archistrax/Qwen2-5-VL-tuned-checkpoints"
+  experiment_name: "MiddleInjection-upd-transcribation-upd-transcribation"
+  hf_checkpoint: "Archistrax/Qwen2-5-VL-middle-tuned-transcribation-checkpoints"
 
 clearml:
   project_name: ${project.name}
@@ -14,12 +14,12 @@ dataset:
   kwargs:
     transcribation_feature_name: "transcribation"
     calibration_feature_name: "model_description"
-    calib_prob: 0.3
+    calib_prob: 0.2
   # name: "set_eye_dataset_off"
   # name: "dried_heatmaps"
 
 model:
-  name: "baked_heat_qwen"
+  name: "baked_middle_heat_qwen"
   kwargs:
     torch_dtype: "bfloat16"
     device_map: "cuda"
@@ -27,17 +27,17 @@ model:
     trust_remote_code: true
 
 trainer:
-  output_dir: "./full_heat_qwen2.5-checkpoints"
+  output_dir: "./middle_tune_heat_qwen2.5-checkpoints"
   num_train_epochs: 50
-  per_device_train_batch_size: 8
+  per_device_train_batch_size: 18
   per_device_eval_batch_size: 12
   gradient_accumulation_steps: 2
-  learning_rate: 4e-6
+  learning_rate: 8e-6
   weight_decay: 0.01
   lr_scheduler_type: "linear"
   warmup_steps: 20
   logging_steps: 2
-  save_steps: 50
+  save_steps: 100
   save_strategy: "steps"
   bf16: true
   fp16: false
@@ -52,26 +52,18 @@ trainer:
   # max_grad_norm: 1.0
 
 lora:
-  r: 128
+  r: 64
   lora_alpha: 128
   lora_dropout: 0.1
   bias: "none"
-  target_modules:
-    - "heat_embedding.linear1"
-    - "heat_embedding.linear2"
-    - "visual.merger.mlp.0"
-    - "visual.merger.mlp.2"
-    - "visual.layers.32.qkv"
-    - "visual.layers.32.proj"
-    - "visual.layers.32.q"
-    - "visual.layers.32.kv"
-    - "visual.layers.32.gate_proj"
-    - "visual.layers.32.up_proj"
-    - "visual.layers.32.down_proj"
-    - "model.q_proj"
-    - "model.k_proj"
-    - "model.v_proj"
-    - "model.o_proj"
-    - "model.gate_proj"
-    - "model.up_proj"
-    - "model.down_proj"
+  target_modules_patterns:
+    - "heat_embedding\\.linear[12]"       # heat_embedding.linear1 и heat_embedding.linear2
+    - "visual\\.merger\\.mlp\\.[02]"         # visual.merger.mlp.0 и visual.merger.mlp.2
+    - "visual\\.heat_block\\.(attn_self\\.(qkv|proj)|attn_cross\\.(q|kv)|mlp\\.(gate_proj|up_proj|down_proj))"
+    - "visual\\.blocks\\.2[3-9]\\.(attn\\.(qkv|proj)|mlp\\.(gate_proj|up_proj|down_proj))" 
+    - "visual\\.blocks\\.3[01]\\.(attn\\.(qkv|proj)|mlp\\.(gate_proj|up_proj|down_proj))" 
+    - "model\\.layers\\.\\d+\\.self_attn\\.(q_proj|k_proj|v_proj|o_proj)" # Все self_attn проекции в языковой модели
+    - "model\\.layers\\.\\d+\\.mlp\\.(gate_proj|up_proj|down_proj)"       # Все mlp проекции в языковой модели
+  # modules_to_save можно оставить как есть, если нужно сохранять какие-то модули целиком
+  # modules_to_save:
+  #   - "some_full_module_to_save"

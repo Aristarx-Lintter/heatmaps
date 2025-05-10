@@ -1,4 +1,5 @@
 import fire
+import re
 
 from omegaconf import OmegaConf
 from transformers import AutoProcessor, AutoConfig, PreTrainedModel, ProcessorMixin, TrainingArguments, Trainer
@@ -14,11 +15,49 @@ from src.train_tools.callbacks import ClearMLCallback, SaveCustomWeightsCallback
 
 
 def setup_lora(model: PreTrainedModel, lora_cfg: dict) -> PreTrainedModel:
-    lora_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM,
-        **lora_cfg 
-    )
+    target_modules_patterns = lora_cfg.pop('target_modules_patterns', [])
+
+    all_module_names = [name for name, _ in model.named_modules()]
+    final_target_modules = set()
+
+    if target_modules_patterns:
+        print("\n=== Applying LoRA to modules based on patterns: ===")
+        for pattern_str in target_modules_patterns:
+            try:
+                pattern = re.compile(pattern_str)
+            except re.error as e:
+                print(f"Warning: Invalid regex pattern '{pattern_str}': {e}. Skipping this pattern.")
+                continue
+            
+            found_for_pattern = False
+            for module_name in all_module_names:
+                if pattern.fullmatch(module_name):
+                    final_target_modules.add(module_name)
+                    if not found_for_pattern:
+                        print(f"  Pattern '{pattern_str}' matched:")
+                        found_for_pattern = True
+                    print(f"    - {module_name}")
+            if not found_for_pattern:
+                print(f"  Pattern '{pattern_str}' did not match any module names.")
+        print("==================================================")
+    else:
+        print("Warning: No target_modules_patterns specified in LoRA config.")
+
+    if not final_target_modules:
+        print("Warning: No modules were matched by the provided patterns for LoRA. LoRA will not be applied to any specific layers directly via target_modules. Check your patterns.")
+
+    lora_config_params = {
+        **lora_cfg,
+        'task_type': TaskType.CAUSAL_LM,
+        'target_modules': list(final_target_modules) if final_target_modules else None,
+    }
+
+    lora_config = LoraConfig(**lora_config_params)
+    
     model = get_peft_model(model, lora_config)
+    print("\n=== LoRA Model Trainable Parameters (after get_peft_model) ===")
+    model.print_trainable_parameters()
+    print("===========================================================")
     return model
 
 
@@ -65,7 +104,6 @@ class HeatmapInjectionExperiment(Experiment):
 
 
 def main(config):
-    # path = "Archistrax/Qwen2_5_VL"
     experiment = HeatmapInjectionExperiment(config)
     experiment.prepare_for_training()
     experiment.task_init()

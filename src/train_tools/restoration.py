@@ -111,7 +111,7 @@ def _apply_custom_weights(
         logger.info(f"Loading custom weights state_dict from: {weights_path}")
         custom_state_dict = torch.load(weights_path, map_location='cpu')
         keys_heat = {k.split('.', 1)[1]: v for k, v in custom_state_dict.items() if k.startswith("heat_embedding.")}
-        keys_visual = {k.split('.', 1)[1]: v for k, v in custom_state_dict.items() if k.startswith("visual_last_block.")}
+        keys_visual = {k.split('.', 1)[1]: v for k, v in custom_state_dict.items() if k.startswith("heat_block.")}
 
         if keys_heat:
             missing, unexpected = model.base_model.model.heat_embedding.load_state_dict(keys_heat, strict=False)
@@ -119,9 +119,9 @@ def _apply_custom_weights(
             logger.info("Applied custom weights to heat_embedding.")
 
         if keys_visual:
-            missing, unexpected = model.base_model.model.visual.blocks[-1].load_state_dict(keys_visual, strict=False)
-            if missing or unexpected: logger.warning(f"Apply Visual Last Block - Missing: {missing}, Unexpected: {unexpected}")
-            logger.info("Applied custom weights to visual.blocks[-1].")
+            missing, unexpected = model.base_model.model.visual.heat_block.load_state_dict(keys_visual, strict=False)
+            if missing or unexpected: logger.warning(f"Apply Visual Heat Block - Missing: {missing}, Unexpected: {unexpected}")
+            logger.info("Applied custom weights to visual.heat_block.")
 
     except Exception as e:
         logger.error(f"Failed to load or apply custom weights from {weights_path}: {e}")
@@ -148,16 +148,6 @@ def load_model_with_adapters(
 
     adapter_load_kwargs = {"device_map": device_map, **peft_kwargs}
     model = _load_peft_adapters(base_model, checkpoint_identifier, subfolder, revision, **adapter_load_kwargs)
-
-    # --- Explicitly set custom layers to trainable AFTER loading PEFT adapters --- #
-    # This is necessary because PeftModel.from_pretrained freezes the base model.
-    logger.info("Setting requires_grad=True for custom trained layers (heat_embedding, visual.blocks[-1])...")
-    for param in model.base_model.model.heat_embedding.parameters():
-         param.requires_grad = True
-    for param in model.base_model.model.visual.blocks[-1].parameters():
-         param.requires_grad = True
-    logger.info("Custom layers set to trainable.")
-    # ----------------------------------------------------------------------------- #
 
     if load_custom_weights:
         custom_weights_path = _find_custom_weights_path(checkpoint_identifier, subfolder, revision)
